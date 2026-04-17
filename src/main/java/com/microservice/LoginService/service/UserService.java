@@ -1,0 +1,102 @@
+package com.microservice.LoginService.service;
+
+import com.microservice.LoginService.dto.*;
+import com.microservice.LoginService.entity.Role;
+import com.microservice.LoginService.entity.User;
+import com.microservice.LoginService.exception.ApiException;
+import com.microservice.LoginService.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    // ── Create User ───────────────────────────────────────────────────────────
+
+    public UserResponse createUser(CreateUserRequest request, String createdByUsername) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new ApiException("Username already exists: " + request.getUsername(), HttpStatus.CONFLICT);
+        }
+
+        User creator = userRepository.findByUsername(createdByUsername)
+                .orElseThrow(() -> new ApiException("Creator not found", HttpStatus.NOT_FOUND));
+
+        // ADMIN cannot create SUPER_ADMIN or another ADMIN
+        if (creator.getRole() == Role.ADMIN) {
+            if (request.getRole() == Role.SUPER_ADMIN || request.getRole() == Role.ADMIN) {
+                throw new ApiException("ADMIN can only create STAFF, KITCHEN, or WAITER users", HttpStatus.FORBIDDEN);
+            }
+        }
+
+        User user = User.builder()
+                .username(request.getUsername())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(request.getRole())
+                .restaurantId(request.getRestaurantId())
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .isActive(true)
+                .build();
+
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    // ── Get Users ─────────────────────────────────────────────────────────────
+
+    public List<UserResponse> getUsers(Long restaurantId) {
+        List<User> users = (restaurantId != null)
+                ? userRepository.findByRestaurantId(restaurantId)
+                : userRepository.findAll();
+        return users.stream().map(UserResponse::from).collect(Collectors.toList());
+    }
+
+    // ── Get User By ID ────────────────────────────────────────────────────────
+
+    public UserResponse getUserById(Long id) {
+        return UserResponse.from(
+                userRepository.findById(id)
+                        .orElseThrow(() -> new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND)));
+    }
+
+    // ── Update User ───────────────────────────────────────────────────────────
+
+    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND));
+
+        if (request.getPhone() != null) user.setPhone(request.getPhone());
+        if (request.getEmail() != null) user.setEmail(request.getEmail());
+        if (request.getRestaurantId() != null) user.setRestaurantId(request.getRestaurantId());
+
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    // ── Delete User ───────────────────────────────────────────────────────────
+
+    public void deleteUser(Long id) {
+        if (!userRepository.existsById(id)) {
+            throw new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND);
+        }
+        userRepository.deleteById(id);
+    }
+
+    // ── Activate / Deactivate ─────────────────────────────────────────────────
+
+    public UserResponse updateStatus(Long id, UpdateStatusRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND));
+        user.setIsActive(request.getIsActive());
+        return UserResponse.from(userRepository.save(user));
+    }
+}
