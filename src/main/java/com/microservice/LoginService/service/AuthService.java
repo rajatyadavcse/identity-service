@@ -37,30 +37,25 @@ public class AuthService {
 
     // ── Login ─────────────────────────────────────────────────────────────────
 
-    public LoginResponse login(LoginRequest request) {
+    public AuthTokens login(LoginRequest request) {
         Authentication auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
         User user = principal.getUser();
 
-        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
+        String accessToken  = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
         String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
         refreshTokenStore.put(user.getUsername(), refreshToken);
 
-        return LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .role("ROLE_" + user.getRole().name())
-                .build();
+        return new AuthTokens(accessToken, refreshToken, "ROLE_" + user.getRole().name());
     }
 
     // ── Refresh Token ─────────────────────────────────────────────────────────
+    // Token is read from the HttpOnly cookie by the controller; the raw value is passed here.
 
-    public LoginResponse refreshToken(RefreshTokenRequest request) {
-        String refreshToken = request.getRefreshToken();
+    public AuthTokens refreshToken(String refreshToken) {
         String username;
-
         try {
             username = jwtUtil.extractUsername(refreshToken);
         } catch (Exception e) {
@@ -80,15 +75,11 @@ public class AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
 
-        String newAccessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
+        String newAccessToken  = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
         String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername());
         refreshTokenStore.put(username, newRefreshToken);
 
-        return LoginResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .role("ROLE_" + user.getRole().name())
-                .build();
+        return new AuthTokens(newAccessToken, newRefreshToken, "ROLE_" + user.getRole().name());
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────
@@ -105,7 +96,6 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        // Force re-login by invalidating existing refresh token
         refreshTokenStore.remove(user.getUsername());
     }
 
@@ -121,7 +111,6 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        // Force re-login after password change
         refreshTokenStore.remove(username);
     }
 }

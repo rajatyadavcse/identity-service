@@ -36,15 +36,17 @@ public class DataInitializer {
                 log.info("DataInitializer: created '{}' with role SUPER_ADMIN", SUPER_USER);
 
             } else {
-                // User exists — fix password if it is not a valid BCrypt hash
+                // User exists — verify the stored hash actually matches SUPER_PASSWORD.
+                // A prefix check ($2a$) is not enough: the hash may have been manually set
+                // to a hash of a DIFFERENT string, which would still look like BCrypt.
                 User user = existing.get();
-                String storedPassword = user.getPassword();
-                if (storedPassword == null || !storedPassword.startsWith("$2")) {
+                boolean passwordCorrect = passwordEncoder.matches(SUPER_PASSWORD, user.getPassword());
+                if (!passwordCorrect) {
                     user.setPassword(passwordEncoder.encode(SUPER_PASSWORD));
                     userRepository.save(user);
-                    log.warn("DataInitializer: re-encoded plain-text password for '{}' to BCrypt", SUPER_USER);
+                    log.warn("DataInitializer: stored password for '{}' did not match — re-encoded to BCrypt", SUPER_USER);
                 } else {
-                    log.info("DataInitializer: '{}' already has a valid BCrypt password — no changes needed", SUPER_USER);
+                    log.info("DataInitializer: '{}' password verified OK — no changes needed", SUPER_USER);
                 }
             }
         };
