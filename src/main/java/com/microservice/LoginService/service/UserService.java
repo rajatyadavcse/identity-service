@@ -22,6 +22,9 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private EmailVerificationService emailVerificationService;
+
     // ── Create User ───────────────────────────────────────────────────────────
 
     public UserResponse createUser(CreateUserRequest request, String createdByUsername) {
@@ -49,7 +52,12 @@ public class UserService {
                 .isActive(true)
                 .build();
 
-        return UserResponse.from(userRepository.save(user));
+        User savedUser = userRepository.save(user);
+
+        // If email was provided, send an OTP so the user can verify before logging in
+        emailVerificationService.sendEmailVerificationOtp(savedUser);
+
+        return UserResponse.from(savedUser);
     }
 
     // ── Get Users ─────────────────────────────────────────────────────────────

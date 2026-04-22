@@ -10,9 +10,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Component
@@ -48,6 +50,7 @@ public class JwtUtil {
                 .claims()
                 .add(claims)
                 .subject(subject)
+                .id(UUID.randomUUID().toString())   // unique JTI — used for blacklisting on logout
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiry))
                 .and()
@@ -56,6 +59,14 @@ public class JwtUtil {
     }
 
     // ── Token Extraction ──────────────────────────────────────────────────────
+
+    public String extractJti(String token) {
+        return extractClaim(token, Claims::getId);
+    }
+
+    public Instant extractExpiryAsInstant(String token) {
+        return extractClaim(token, claims -> claims.getExpiration().toInstant());
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);

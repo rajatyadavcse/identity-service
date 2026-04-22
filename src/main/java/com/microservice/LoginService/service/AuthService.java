@@ -6,6 +6,7 @@ import com.microservice.LoginService.exception.ApiException;
 import com.microservice.LoginService.repository.UserRepository;
 import com.microservice.LoginService.security.JwtUtil;
 import com.microservice.LoginService.security.UserPrincipal;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Service
 public class AuthService {
 
@@ -35,6 +37,9 @@ public class AuthService {
     // In-memory store: username → refresh token (lost on restart)
     private final Map<String, String> refreshTokenStore = new ConcurrentHashMap<>();
 
+    @Autowired
+    private EmailVerificationService emailVerificationService;
+
     // ── Login ─────────────────────────────────────────────────────────────────
 
     public AuthTokens login(LoginRequest request) {
@@ -43,6 +48,13 @@ public class AuthService {
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
         User user = principal.getUser();
+
+        // Block login if email is set but not yet verified
+        if (user.getEmail() != null && !user.getEmail().isBlank() && !Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new ApiException(
+                    "Email not verified. Please check your inbox for the verification OTP.",
+                    HttpStatus.FORBIDDEN);
+        }
 
         String accessToken  = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
         String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
@@ -112,5 +124,67 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         refreshTokenStore.remove(username);
+    }
+
+    // ── Verify Email ──────────────────────────────────────────────────────────
+
+    public void verifyEmail(VerifyEmailRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
+
+        if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new ApiException("Email is already verified.", HttpStatus.BAD_REQUEST);
+        }
+
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new ApiException("No email address associated with this account.", HttpStatus.BAD_REQUEST);
+        }
+
+        emailVerificationService.verifyEmailOtp(user, request.getOtp());
+
+        user.setIsEmailVerified(true);
+        userRepository.save(user);
+        log.info("AuthService: email verified for user '{}'", user.getUsername());
+    }
+
+    // ── Forgot Password ───────────────────────────────────────────────────────
+
+    /**
+     * Initiates a password-reset OTP flow.
+     * Always returns without revealing whether the email exists (prevents enumeration).
+     */
+    public void forgotPassword(ForgotPasswordRequest request) {
+        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+            if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
+                // Email is registered but not verified — silently skip (can't authenticate the user)
+                log.warn("AuthService: forgot-password requested for unverified email '{}'", request.getEmail());
+                return;
+            }
+            emailVerificationService.sendPasswordResetOtp(user);
+        });
+        // Always succeed — caller gets a generic response regardless of email existence
+    }
+
+    // ── Reset Password with OTP ────────────────────────────────────────────────
+
+    public void resetPasswordWithOtp(ResetPasswordWithOtpRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ApiException(
+                        "No account found with this email address.", HttpStatus.NOT_FOUND));
+
+        if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new ApiException(
+                    "Email is not verified. Password reset is not available for this account.",
+                    HttpStatus.FORBIDDEN);
+        }
+
+        emailVerificationService.verifyPasswordResetOtp(user, request.getOtp());
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Invalidate all active sessions for this user
+        refreshTokenStore.remove(user.getUsername());
+        log.info("AuthService: password reset via OTP for user '{}'", user.getUsername());
     }
 }

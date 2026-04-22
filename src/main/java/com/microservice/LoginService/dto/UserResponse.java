@@ -20,6 +20,7 @@ public class UserResponse {
     private String phone;
     private String email;
     private Boolean isActive;
+    private Boolean isEmailVerified;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -32,6 +33,7 @@ public class UserResponse {
                 .phone(user.getPhone())
                 .email(user.getEmail())
                 .isActive(user.getIsActive())
+                .isEmailVerified(user.getIsEmailVerified())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

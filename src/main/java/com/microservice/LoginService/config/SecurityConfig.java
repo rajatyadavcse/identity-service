@@ -36,6 +36,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_URLS = {
             "/auth/login",
             "/auth/refresh",
+            "/auth/verify-email",
+            "/auth/forgot-password",
+            "/auth/reset-password-otp",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs",

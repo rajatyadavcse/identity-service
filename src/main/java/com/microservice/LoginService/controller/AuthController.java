@@ -158,6 +158,39 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Password changed successfully"));
     }
 
+    // ── Verify Email ──────────────────────────────────────────────────────
+
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verify email address using the OTP sent at registration",
+            description = "No authentication required. Submit the 6-digit OTP sent to the user's registered email.")
+    public ResponseEntity<MessageResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        authService.verifyEmail(request);
+        return ResponseEntity.ok(new MessageResponse("Email verified successfully. You can now log in."));
+    }
+
+    // ── Forgot Password ──────────────────────────────────────────────────
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Request a password-reset OTP",
+            description = "No authentication required. A 6-digit OTP is sent to the registered email if it exists " +
+                          "and is verified. Always returns 200 to prevent email enumeration.")
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(new MessageResponse(
+                "If this email is registered and verified, an OTP has been sent."));
+    }
+
+    // ── Reset Password with OTP ────────────────────────────────────────────
+
+    @PostMapping("/reset-password-otp")
+    @Operation(summary = "Reset password using OTP (self-service forgot-password flow)",
+            description = "No authentication required. Submit the OTP received via email along with the new password.")
+    public ResponseEntity<MessageResponse> resetPasswordWithOtp(
+            @Valid @RequestBody ResetPasswordWithOtpRequest request) {
+        authService.resetPasswordWithOtp(request);
+        return ResponseEntity.ok(new MessageResponse("Password reset successfully. You can now log in."));
+    }
+
     // ── Private helper ────────────────────────────────────────────────────────
 
     private String extractRefreshCookie(HttpServletRequest request) {
