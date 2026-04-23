@@ -31,6 +31,10 @@ public class UserService {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new ApiException("Username already exists: " + request.getUsername(), HttpStatus.CONFLICT);
         }
+        if (request.getEmail() != null && !request.getEmail().isBlank()
+                && userRepository.existsByEmail(request.getEmail())) {
+            throw new ApiException("Email already in use: " + request.getEmail(), HttpStatus.CONFLICT);
+        }
 
         User creator = userRepository.findByUsername(createdByUsername)
                 .orElseThrow(() -> new ApiException("Creator not found", HttpStatus.NOT_FOUND));
@@ -84,7 +88,16 @@ public class UserService {
                 .orElseThrow(() -> new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND));
 
         if (request.getPhone() != null) user.setPhone(request.getPhone());
-        if (request.getEmail() != null) user.setEmail(request.getEmail());
+        if (request.getEmail() != null) {
+            // Only check uniqueness if the email is actually changing
+            if (!request.getEmail().equalsIgnoreCase(user.getEmail())
+                    && userRepository.existsByEmail(request.getEmail())) {
+                throw new ApiException("Email already in use: " + request.getEmail(), HttpStatus.CONFLICT);
+            }
+            user.setEmail(request.getEmail());
+            // Re-trigger verification if email changed
+            user.setIsEmailVerified(false);
+        }
         if (request.getRestaurantId() != null) user.setRestaurantId(request.getRestaurantId());
 
         return UserResponse.from(userRepository.save(user));
