@@ -43,14 +43,14 @@ public class EmailVerificationService {
     @Transactional
     public void sendEmailVerificationOtp(User user) {
         if (user.getEmail() == null || user.getEmail().isBlank()) {
-            log.debug("EmailVerificationService: no email for user '{}' — skipping verification OTP", user.getUsername());
+            log.debug("EmailVerificationService: no email for user '{}' — skipping verification OTP", user.getEmail());
             return;
         }
 
         String otp = generateOtp();
         persistOtp(user, otp, OtpType.EMAIL_VERIFICATION, otpExpiryMinutes);
-        emailService.sendEmailVerificationOtp(user.getEmail(), user.getUsername(), otp);
-        log.info("EmailVerificationService: verification OTP sent to user '{}'", user.getUsername());
+        emailService.sendEmailVerificationOtp(user.getEmail(), user.getFirstName(), otp);
+        log.info("EmailVerificationService: verification OTP sent to '{}'", user.getEmail());
     }
 
     /**
@@ -61,8 +61,8 @@ public class EmailVerificationService {
     public void sendPasswordResetOtp(User user) {
         String otp = generateOtp();
         persistOtp(user, otp, OtpType.PASSWORD_RESET, resetOtpExpiryMinutes);
-        emailService.sendPasswordResetOtp(user.getEmail(), user.getUsername(), otp);
-        log.info("EmailVerificationService: password-reset OTP sent to user '{}'", user.getUsername());
+        emailService.sendPasswordResetOtp(user.getEmail(), user.getFirstName(), otp);
+        log.info("EmailVerificationService: password-reset OTP sent to '{}'", user.getEmail());
     }
 
     // ── Verify OTPs ───────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ public class EmailVerificationService {
 
         record.setUsed(true);
         emailVerificationRepository.save(record);
-        log.info("EmailVerificationService: email OTP verified for user '{}'", user.getUsername());
+        log.info("EmailVerificationService: email OTP verified for '{}'", user.getEmail());
     }
 
     /**
@@ -112,7 +112,7 @@ public class EmailVerificationService {
 
         record.setUsed(true);
         emailVerificationRepository.save(record);
-        log.info("EmailVerificationService: password-reset OTP verified for user '{}'", user.getUsername());
+        log.info("EmailVerificationService: password-reset OTP verified for '{}'", user.getEmail());
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────────

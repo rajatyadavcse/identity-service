@@ -16,17 +16,14 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Autowired
     private UserRepository userRepository;
 
+    /**
+     * Spring Security calls this with the value passed to UsernamePasswordAuthenticationToken.
+     * After the refactor, that value is always the user's email address.
+     */
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-
-        // TEMPORARY DEBUG — remove after fixing auth issue
-        String pwd = user.getPassword();
-        String preview = (pwd != null && pwd.length() >= 4) ? pwd.substring(0, 4) : pwd;
-        log.warn("DEBUG loadUserByUsername('{}') — stored password prefix='{}', isActive={}",
-                username, preview, user.getIsActive());
-
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
         return new UserPrincipal(user);
     }
 }

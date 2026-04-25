@@ -23,8 +23,14 @@ public class User {
     @Column(nullable = true)
     private Long restaurantId;
 
+    @Column(nullable = false)
+    private String firstName;
+
+    @Column(nullable = false)
+    private String lastName;
+
     @Column(unique = true, nullable = false)
-    private String username;
+    private String email;
 
     @Column(nullable = false)
     private String password;
@@ -35,9 +41,6 @@ public class User {
 
     @Column
     private String phone;
-
-    @Column(unique = true)
-    private String email;
 
     @Column(nullable = false)
     @Builder.Default

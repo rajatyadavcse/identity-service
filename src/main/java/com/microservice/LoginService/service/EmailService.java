@@ -30,18 +30,18 @@ public class EmailService {
     /**
      * Sends an email verification OTP to a newly created user.
      */
-    public void sendEmailVerificationOtp(String toEmail, String username, String otp) {
+    public void sendEmailVerificationOtp(String toEmail, String firstName, String otp) {
         String subject = "Verify your email – " + appName;
-        String body = buildVerificationEmailBody(username, otp);
+        String body = buildVerificationEmailBody(firstName, otp);
         send(toEmail, subject, body);
     }
 
     /**
      * Sends a password-reset OTP to the user's verified email.
      */
-    public void sendPasswordResetOtp(String toEmail, String username, String otp) {
+    public void sendPasswordResetOtp(String toEmail, String firstName, String otp) {
         String subject = "Password reset OTP – " + appName;
-        String body = buildPasswordResetEmailBody(username, otp);
+        String body = buildPasswordResetEmailBody(firstName, otp);
         send(toEmail, subject, body);
     }
 
@@ -66,7 +66,7 @@ public class EmailService {
         }
     }
 
-    private String buildVerificationEmailBody(String username, String otp) {
+    private String buildVerificationEmailBody(String firstName, String otp) {
         return """
                 <html>
                 <body style="font-family: Arial, sans-serif; color: #333; max-width: 480px; margin: auto;">
@@ -84,10 +84,10 @@ public class EmailService {
                   <p style="color: #aaa; font-size: 12px;">If you did not request this, please ignore this email.</p>
                 </body>
                 </html>
-                """.formatted(username, otp);
+                """.formatted(firstName, otp);
     }
 
-    private String buildPasswordResetEmailBody(String username, String otp) {
+    private String buildPasswordResetEmailBody(String firstName, String otp) {
         return """
                 <html>
                 <body style="font-family: Arial, sans-serif; color: #333; max-width: 480px; margin: auto;">
@@ -106,6 +106,6 @@ public class EmailService {
                 </body>
                 </html>
                 """
-                .formatted(username, otp);
+                .formatted(firstName, otp);
     }
 }

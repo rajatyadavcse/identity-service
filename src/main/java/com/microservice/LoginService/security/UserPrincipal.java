@@ -28,9 +28,13 @@ public class UserPrincipal implements UserDetails {
         return user.getPassword();
     }
 
+    /**
+     * Returns the user's email — email is now the unique identifier that takes
+     * the place of username throughout Spring Security and JWT.
+     */
     @Override
     public String getUsername() {
-        return user.getUsername();
+        return user.getEmail();
     }
 
     @Override

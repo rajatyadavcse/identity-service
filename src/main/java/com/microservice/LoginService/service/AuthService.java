@@ -34,7 +34,7 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // In-memory store: username → refresh token (lost on restart)
+    // In-memory store: email → refresh token (lost on restart)
     private final Map<String, String> refreshTokenStore = new ConcurrentHashMap<>();
 
     @Autowired
@@ -43,78 +43,78 @@ public class AuthService {
     // ── Login ─────────────────────────────────────────────────────────────────
 
     public AuthTokens login(LoginRequest request) {
+        // Spring Security calls loadUserByUsername(email) internally
         Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
         User user = principal.getUser();
 
-        // Block login if email is set but not yet verified
-        if (user.getEmail() != null && !user.getEmail().isBlank() && !Boolean.TRUE.equals(user.getIsEmailVerified())) {
+        // Block login if email is not yet verified
+        if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
             throw new ApiException(
                     "Email not verified. Please check your inbox for the verification OTP.",
                     HttpStatus.FORBIDDEN);
         }
 
-        String accessToken  = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
-        refreshTokenStore.put(user.getUsername(), refreshToken);
+        String accessToken  = jwtUtil.generateAccessToken(user.getEmail(), user.getRole(), user.getRestaurantId());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
+        refreshTokenStore.put(user.getEmail(), refreshToken);
 
         return new AuthTokens(accessToken, refreshToken, "ROLE_" + user.getRole().name());
     }
 
     // ── Refresh Token ─────────────────────────────────────────────────────────
-    // Token is read from the HttpOnly cookie by the controller; the raw value is passed here.
 
     public AuthTokens refreshToken(String refreshToken) {
-        String username;
+        String email;
         try {
-            username = jwtUtil.extractUsername(refreshToken);
+            email = jwtUtil.extractUsername(refreshToken);
         } catch (Exception e) {
             throw new ApiException("Invalid refresh token", HttpStatus.UNAUTHORIZED);
         }
 
         if (jwtUtil.isTokenExpired(refreshToken)) {
-            refreshTokenStore.remove(username);
+            refreshTokenStore.remove(email);
             throw new ApiException("Refresh token expired. Please login again.", HttpStatus.UNAUTHORIZED);
         }
 
-        String storedToken = refreshTokenStore.get(username);
+        String storedToken = refreshTokenStore.get(email);
         if (storedToken == null || !storedToken.equals(refreshToken)) {
             throw new ApiException("Refresh token is invalid or already used", HttpStatus.UNAUTHORIZED);
         }
 
-        User user = userRepository.findByUsername(username)
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
 
-        String newAccessToken  = jwtUtil.generateAccessToken(user.getUsername(), user.getRole(), user.getRestaurantId());
-        String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername());
-        refreshTokenStore.put(username, newRefreshToken);
+        String newAccessToken  = jwtUtil.generateAccessToken(user.getEmail(), user.getRole(), user.getRestaurantId());
+        String newRefreshToken = jwtUtil.generateRefreshToken(user.getEmail());
+        refreshTokenStore.put(email, newRefreshToken);
 
         return new AuthTokens(newAccessToken, newRefreshToken, "ROLE_" + user.getRole().name());
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────
 
-    public void logout(String username) {
-        refreshTokenStore.remove(username);
+    public void logout(String email) {
+        refreshTokenStore.remove(email);
     }
 
     // ── Reset Password (Admin-only) ───────────────────────────────────────────
 
     public void resetPassword(ResetPasswordRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new ApiException("User not found: " + request.getUsername(), HttpStatus.NOT_FOUND));
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ApiException("User not found: " + request.getEmail(), HttpStatus.NOT_FOUND));
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        refreshTokenStore.remove(user.getUsername());
+        refreshTokenStore.remove(user.getEmail());
     }
 
     // ── Change Password (Self-service) ────────────────────────────────────────
 
-    public void changePassword(String username, ChangePasswordRequest request) {
-        User user = userRepository.findByUsername(username)
+    public void changePassword(String email, ChangePasswordRequest request) {
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
@@ -123,46 +123,36 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        refreshTokenStore.remove(username);
+        refreshTokenStore.remove(email);
     }
 
     // ── Verify Email ──────────────────────────────────────────────────────────
 
     public void verifyEmail(VerifyEmailRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
+        User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND));
 
         if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
             throw new ApiException("Email is already verified.", HttpStatus.BAD_REQUEST);
         }
 
-        if (user.getEmail() == null || user.getEmail().isBlank()) {
-            throw new ApiException("No email address associated with this account.", HttpStatus.BAD_REQUEST);
-        }
-
         emailVerificationService.verifyEmailOtp(user, request.getOtp());
 
         user.setIsEmailVerified(true);
         userRepository.save(user);
-        log.info("AuthService: email verified for user '{}'", user.getUsername());
+        log.info("AuthService: email verified for '{}'", user.getEmail());
     }
 
     // ── Forgot Password ───────────────────────────────────────────────────────
 
-    /**
-     * Initiates a password-reset OTP flow.
-     * Always returns without revealing whether the email exists (prevents enumeration).
-     */
     public void forgotPassword(ForgotPasswordRequest request) {
         userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
             if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
-                // Email is registered but not verified — silently skip (can't authenticate the user)
                 log.warn("AuthService: forgot-password requested for unverified email '{}'", request.getEmail());
                 return;
             }
             emailVerificationService.sendPasswordResetOtp(user);
         });
-        // Always succeed — caller gets a generic response regardless of email existence
     }
 
     // ── Reset Password with OTP ────────────────────────────────────────────────
@@ -184,7 +174,7 @@ public class AuthService {
         userRepository.save(user);
 
         // Invalidate all active sessions for this user
-        refreshTokenStore.remove(user.getUsername());
-        log.info("AuthService: password reset via OTP for user '{}'", user.getUsername());
+        refreshTokenStore.remove(user.getEmail());
+        log.info("AuthService: password reset via OTP for '{}'", user.getEmail());
     }
 }

@@ -14,11 +14,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserResponse {
     private Long id;
-    private String username;
+    private String firstName;
+    private String lastName;
+    private String email;
     private String role;
     private Long restaurantId;
     private String phone;
-    private String email;
     private Boolean isActive;
     private Boolean isEmailVerified;
     private LocalDateTime createdAt;
@@ -27,11 +28,12 @@ public class UserResponse {
     public static UserResponse from(User user) {
         return UserResponse.builder()
                 .id(user.getId())
-                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .email(user.getEmail())
                 .role("ROLE_" + user.getRole().name())
                 .restaurantId(user.getRestaurantId())
                 .phone(user.getPhone())
-                .email(user.getEmail())
                 .isActive(user.getIsActive())
                 .isEmailVerified(user.getIsEmailVerified())
                 .createdAt(user.getCreatedAt())

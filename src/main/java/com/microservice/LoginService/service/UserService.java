@@ -27,16 +27,13 @@ public class UserService {
 
     // ── Create User ───────────────────────────────────────────────────────────
 
-    public UserResponse createUser(CreateUserRequest request, String createdByUsername) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new ApiException("Username already exists: " + request.getUsername(), HttpStatus.CONFLICT);
-        }
-        if (request.getEmail() != null && !request.getEmail().isBlank()
-                && userRepository.existsByEmail(request.getEmail())) {
+    public UserResponse createUser(CreateUserRequest request, String createdByEmail) {
+        // Email uniqueness check
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new ApiException("Email already in use: " + request.getEmail(), HttpStatus.CONFLICT);
         }
 
-        User creator = userRepository.findByUsername(createdByUsername)
+        User creator = userRepository.findByEmail(createdByEmail)
                 .orElseThrow(() -> new ApiException("Creator not found", HttpStatus.NOT_FOUND));
 
         // ADMIN cannot create SUPER_ADMIN or another ADMIN
@@ -47,18 +44,19 @@ public class UserService {
         }
 
         User user = User.builder()
-                .username(request.getUsername())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .restaurantId(request.getRestaurantId())
                 .phone(request.getPhone())
-                .email(request.getEmail())
                 .isActive(true)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // If email was provided, send an OTP so the user can verify before logging in
+        // Send OTP so the user can verify before logging in
         emailVerificationService.sendEmailVerificationOtp(savedUser);
 
         return UserResponse.from(savedUser);
@@ -87,6 +85,8 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ApiException("User not found with id: " + id, HttpStatus.NOT_FOUND));
 
+        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName() != null) user.setLastName(request.getLastName());
         if (request.getPhone() != null) user.setPhone(request.getPhone());
         if (request.getEmail() != null) {
             // Only check uniqueness if the email is actually changing

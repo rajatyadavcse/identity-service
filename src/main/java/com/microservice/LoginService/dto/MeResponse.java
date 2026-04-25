@@ -12,14 +12,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class MeResponse {
     private Long id;
-    private String username;
+    private String firstName;
+    private String lastName;
+    private String email;
     private String role;
     private Long restaurantId;
 
     public static MeResponse from(User user) {
         return MeResponse.builder()
                 .id(user.getId())
-                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .email(user.getEmail())
                 .role("ROLE_" + user.getRole().name())
                 .restaurantId(user.getRestaurantId())
                 .build();
