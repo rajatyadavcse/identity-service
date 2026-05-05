@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
@@ -28,4 +29,13 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
     @Transactional
     @Query("UPDATE EmailVerification e SET e.used = true WHERE e.user = :user AND e.type = :type AND e.used = false")
     void invalidateAllPendingByUserAndType(@Param("user") User user, @Param("type") OtpType type);
+
+    /**
+     * Count how many OTPs of a given type were issued for a user after {@code since}.
+     * Used for rate-limiting resend requests (e.g. max N requests per hour).
+     */
+    @Query("SELECT COUNT(e) FROM EmailVerification e WHERE e.user = :user AND e.type = :type AND e.createdAt >= :since")
+    long countByUserAndTypeAndCreatedAtAfter(@Param("user") User user,
+                                             @Param("type") OtpType type,
+                                             @Param("since") LocalDateTime since);
 }

@@ -168,6 +168,20 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Email verified successfully. You can now log in."));
     }
 
+    // ── Resend Verification OTP ───────────────────────────────────────────────
+
+    @PostMapping("/resend-verification-otp")
+    @Operation(summary = "Resend the email-verification OTP",
+            description = "No authentication required. Use this when the original OTP was not received or has expired. " +
+                          "Returns 404 if the email is not registered, 400 if already verified, and 429 if rate-limited " +
+                          "(max 3 requests per hour per email).")
+    public ResponseEntity<MessageResponse> resendVerificationOtp(
+            @Valid @RequestBody ResendVerificationOtpRequest request) {
+        authService.resendVerificationOtp(request);
+        return ResponseEntity.ok(new MessageResponse(
+                "A new verification OTP has been sent to your email."));
+    }
+
     // ── Forgot Password ──────────────────────────────────────────────────
 
     @PostMapping("/forgot-password")

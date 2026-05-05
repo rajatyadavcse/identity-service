@@ -31,6 +31,14 @@ public class EmailVerificationService {
     @Value("${app.otp.reset-expiry-minutes:15}")
     private int resetOtpExpiryMinutes;
 
+    /** Max number of verification OTP resend attempts allowed within the rate-limit window. */
+    @Value("${app.otp.resend-max-attempts:3}")
+    private int resendMaxAttempts;
+
+    /** Duration (in hours) of the sliding rate-limit window for OTP resend requests. */
+    @Value("${app.otp.resend-window-hours:1}")
+    private int resendWindowHours;
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     // ── Send OTPs ─────────────────────────────────────────────────────────────
@@ -63,6 +71,39 @@ public class EmailVerificationService {
         persistOtp(user, otp, OtpType.PASSWORD_RESET, resetOtpExpiryMinutes);
         emailService.sendPasswordResetOtp(user.getEmail(), user.getFirstName(), otp);
         log.info("EmailVerificationService: password-reset OTP sent to '{}'", user.getEmail());
+    }
+
+    /**
+     * Re-sends a fresh email-verification OTP to an unverified user.
+     * <p>
+     * Guards:
+     * <ul>
+     *   <li>Rejects the request if the email is already verified.</li>
+     *   <li>Rate-limits to {@code app.otp.resend-max-attempts} (default 3) per
+     *       {@code app.otp.resend-window-hours} (default 1 hour).</li>
+     * </ul>
+     * The old pending OTP is automatically invalidated by {@link #persistOtp}.
+     *
+     * @param user the unverified user whose OTP should be resent
+     * @throws ApiException with 429 if the rate limit is exceeded
+     */
+    @Transactional
+    public void resendEmailVerificationOtp(User user) {
+        LocalDateTime windowStart = LocalDateTime.now().minusHours(resendWindowHours);
+        long recentAttempts = emailVerificationRepository
+                .countByUserAndTypeAndCreatedAtAfter(user, OtpType.EMAIL_VERIFICATION, windowStart);
+
+        if (recentAttempts >= resendMaxAttempts) {
+            log.warn("EmailVerificationService: resend rate-limit hit for '{}'", user.getEmail());
+            throw new ApiException(
+                    "Too many OTP requests. Please wait before requesting another one.",
+                    HttpStatus.TOO_MANY_REQUESTS);
+        }
+
+        String otp = generateOtp();
+        persistOtp(user, otp, OtpType.EMAIL_VERIFICATION, otpExpiryMinutes);
+        emailService.sendEmailVerificationOtp(user.getEmail(), user.getFirstName(), otp);
+        log.info("EmailVerificationService: verification OTP resent to '{}'", user.getEmail());
     }
 
     // ── Verify OTPs ───────────────────────────────────────────────────────────

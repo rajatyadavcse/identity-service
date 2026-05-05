@@ -155,6 +155,32 @@ public class AuthService {
         });
     }
 
+    // ── Resend Verification OTP ───────────────────────────────────────────────
+
+    /**
+     * Resends the email verification OTP for an unverified account.
+     * <p>
+     * Unlike the forgot-password flow, this endpoint returns explicit errors for
+     * unknown emails and already-verified accounts. This is intentional:
+     * the registration endpoint already reveals whether an email is taken, so
+     * hiding email existence here is inconsistent and actively harms UX by leaving
+     * users with no actionable feedback when they mistype their email at registration.
+     */
+    public void resendVerificationOtp(ResendVerificationOtpRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ApiException(
+                        "No account found with this email. Please register first.",
+                        HttpStatus.NOT_FOUND));
+
+        if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new ApiException(
+                    "This email is already verified. You can log in directly.",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        emailVerificationService.resendEmailVerificationOtp(user);
+    }
+
     // ── Reset Password with OTP ────────────────────────────────────────────────
 
     public void resetPasswordWithOtp(ResetPasswordWithOtpRequest request) {
